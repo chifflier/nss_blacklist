@@ -1,0 +1,46 @@
+#!/bin/sh -e
+#
+# (c) 2011-2015 Pierre Chifflier <chifflier@wzdftpd.net>
+# Licensed under GPL version 2 or later
+#
+# Blacklist all builtin certificates from a NSS store
+
+# TODO
+# - split reading certificates (in a file)
+# - split blacklisting certificates (from a file)
+# - add whitelist
+
+dbdir="$1"
+
+NSS_CKBI_LOC=/usr/lib/x86_64-linux-gnu/nss/libnssckbi.so
+
+if [ "x$dbdir" = "x" ]; then
+	echo "Usage: $0 dbdir"
+	exit 1
+fi
+
+# add module if required
+if ! modutil -dbdir "$dbdir" -list internal; then
+	echo "adding internal module"
+	modutil -add internal -force -libfile "$NSS_CKBI_LOC" -dbdir "$dbdir"
+fi
+
+certutil -L -d "$dbdir" -h "Builtin Object Token" |
+grep "Builtin" |
+while read line
+do
+	echo $line | sed 's/\(.*\)\s\+\([a-zA-Z ]\?,\)\+[a-zA-Z ]\?/\1/'
+done |
+
+while read certname
+do
+	# TODO check for blacklist exceptions
+	echo "blacklisting [$certname]"
+	certutil -M -d "$dbdir" -n "$certname" -t ',,'
+done
+
+echo "removing internal module"
+modutil -delete internal -force -dbdir "$dbdir"
+
+
+exit 0
